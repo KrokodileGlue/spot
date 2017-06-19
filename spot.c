@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 
 struct Op {
 	char body;
@@ -15,6 +16,7 @@ struct Op {
 		/* prefix operator types */
 		PREFIX,
 		GROUP, /* only used for grouping with () */
+		LIST,
 
 		/* infix operator types */
 		POSTFIX,
@@ -25,9 +27,12 @@ struct Op {
 } operators[] = {
 	{ '(', ')', 7, LEFT,  MEMBER  },
 	{ '[', ']', 7, LEFT,  MEMBER  },
+	{ '{', '}', 7, LEFT,  LIST    },
+	{ '"', '"', 7, LEFT,  LIST    },
 	{ '+', 'n', 6, RIGHT, PREFIX  },
 	{ '-', 'n', 6, RIGHT, PREFIX  },
 	{ 'p', 'n', 6, RIGHT, PREFIX  },
+	{ 's', 'n', 6, RIGHT, PREFIX  },
 	{ '!', 'n', 6, RIGHT, PREFIX  },
 	{ '(', ')', 6, LEFT,  GROUP   },
 	{ '*', 'n', 5, LEFT,  BINARY  },
@@ -35,6 +40,7 @@ struct Op {
 	{ '%', 'n', 5, LEFT,  BINARY  },
 	{ '+', 'n', 4, LEFT,  BINARY  },
 	{ '-', 'n', 4, LEFT,  BINARY  },
+	{ '~', 'n', 4, LEFT,  BINARY  },
 	{ '?', ':', 3, LEFT,  TERNARY },
 	{ '=', 'n', 2, LEFT,  BINARY  },
 	{ 'w', 'n', 2, LEFT,  BINARY  },
@@ -55,6 +61,10 @@ struct Expr {
 		char val;
 		struct {
 			struct Expr *a, *b, *c;
+		};
+		struct {
+			char *list;
+			size_t len;
 		};
 	};
 };
@@ -77,7 +87,8 @@ struct Op *get_prefix_op()
 	for (size_t i = 0; i < sizeof operators / sizeof operators[0]; i++) {
 		if (operators[i].body == *c
 		    && (operators[i].type == PREFIX
-		    ||  operators[i].type == GROUP)) {
+		    ||  operators[i].type == GROUP
+		    ||  operators[i].type == LIST)) {
 			return operators + i;
 		}
 	}
@@ -105,6 +116,15 @@ struct Expr *parse(int prec)
 			if (*c != op->body2) {
 				printf("(prefix) expected '%c', got '%c'\n", op->body2, *c);
 				exit(EXIT_FAILURE);
+			}
+			c++;
+		} else if (op->type == LIST) {
+			left->len = 0;
+			left->list = malloc(sizeof *left->list);
+			while (*c != op->body2) {
+				left->list = realloc(left->list, (left->len + 1) * sizeof *left->list);
+				left->list[left->len++] = *c;
+				c++;
 			}
 			c++;
 		} else {
@@ -209,6 +229,14 @@ void paren(struct Expr *e)
 			paren(e->b);
 			printf("%c)", e->op->body2);
 		} break;
+		case LIST: {
+			printf("[");
+			for (size_t i = 0; i < e->len; i++) {
+				printf("%c", e->list[i]);
+				if (i != e->len - 1) printf(", ");
+			}
+			printf("]");
+		} break;
 		}
 	} break;
 	}
@@ -290,6 +318,9 @@ void tree(struct Expr *e)
 			tree(e->b);
 			l--;
 		} break;
+		case LIST: {
+			paren(e);
+		} break;
 		}
 	} break;
 	}
@@ -360,16 +391,11 @@ struct Func *get_function(char x)
 
 void add_arg(struct Expr *e)
 {
-	if (e->type == EXPR_OP && e->op->body == ',') {
-		add_arg(e->a);
-		add_arg(e->b);
-		return;
-	}
-
-	if (e->type == EXPR_NAME) {
-		size_t num_arg = fn[num_fn - 1].num_arg;
-		fn[num_fn - 1].arg[num_arg] = e->val;
-		fn[num_fn - 1].num_arg++;
+	if (e->type == EXPR_OP && e->op->type == LIST) {
+		struct Func *f = fn + num_fn;
+		for (size_t i = 0; i < e->len; i++) {
+			f->arg[f->num_arg++] = e->list[i];
+		}
 		return;
 	}
 
@@ -404,6 +430,12 @@ double eval(struct Expr *e)
 				putchar((char)x);
 				return x;
 			} break;
+			case 's': {
+				return e->a->len;
+			} break;
+			case '!': {
+				return eval(e->a) ? 0.f : 1.f;
+			} break;
 			}
 		} break;
 		case BINARY: {
@@ -414,8 +446,8 @@ double eval(struct Expr *e)
 			case '/': return eval(e->a) / eval(e->b); break;
 			case 'w': while (eval(e->a)) eval(e->b);  break;
 			case '=': {
-				eval(e->a);
 				if (e->a->type == EXPR_OP && e->a->op->type == MEMBER) {
+					eval(e->a);
 					struct Func *f = get_function(e->a->a->val);
 					if (f) {
 						f->e = e->b;
@@ -427,6 +459,8 @@ double eval(struct Expr *e)
 				}
 			} break;
 			case ',': eval(e->a); eval(e->b); break;
+			case '~': return eval(e->a) == eval(e->b); break;
+			case '%': return fmod(eval(e->a), eval(e->b)); break;
 			}
 		} break;
 		case TERNARY: {
@@ -437,6 +471,7 @@ double eval(struct Expr *e)
 			}
 		} break;
 		case POSTFIX: {
+			/* TODO: have a postfix operator i guess. */
 			printf("(");
 			paren(e->a);
 			printf(" %c)", e->op->body);
@@ -446,15 +481,20 @@ double eval(struct Expr *e)
 			if (f) {
 				scope++;
 				for (size_t i = 0; i < f->num_arg; i++) {
-					set_variable(f->arg[i], 0.f);
+					set_variable(f->arg[i], 5.f);
 				}
 				double x = eval(f->e);
 				kill_variables(scope--);
 				return x;
+			} else if (e->op->body == '[') {
+				return e->a->list[(size_t)eval(e->b)];
 			} else {
 				add_function(e->a->val);
 				add_arg(e->b);
 			}
+		} break;
+		case LIST: {
+			return (double)e->list[0];
 		} break;
 		}
 	} break;
