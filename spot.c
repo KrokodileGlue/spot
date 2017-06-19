@@ -8,7 +8,8 @@ struct Op {
 	int prec;
 	enum {
 		LEFT,
-		RIGHT
+		RIGHT,
+		NONE
 	} ass;
 	enum OpType {
 		/* prefix operator types */
@@ -26,6 +27,8 @@ struct Op {
 	{ '[', ']', 7, LEFT,  MEMBER  },
 	{ '+', 'n', 6, RIGHT, PREFIX  },
 	{ '-', 'n', 6, RIGHT, PREFIX  },
+	{ 'p', 'n', 6, RIGHT, PREFIX  },
+	{ '!', 'n', 6, RIGHT, PREFIX  },
 	{ '(', ')', 6, LEFT,  GROUP   },
 	{ '*', 'n', 5, LEFT,  BINARY  },
 	{ '/', 'n', 5, LEFT,  BINARY  },
@@ -39,7 +42,7 @@ struct Op {
 };
 
 /* a(a,b)=(a*b),pa(2,4) */
-/* i(x)=((x)w(p(x%(2*5)),x=x/(2*5))),s(x)=(a=0,!(x[a]~0)w(p(x[a]),a=a+1),p(2*5)),a=0,(!(a=a+1~(5*5*4+1)))w(a%3~0&a%5~0?s("fizzbuzz"):a%3~0?s("fizz"):a%5~0?s("buzz"):i(a)) */
+/* i(x)=((x)w(p(x%(2*5)),x=x/(2*5))),s(x)=(a=0,!(x[a]~0)w(p(x[a]),a=a+1),p(2*5)),a=0,(!(a=a+1~(5*5*4+1)))w(a%3~0&a%5~0?s("fizzbuzz"):a%3~0?s("fizz"):a%5~0?s("buzz"):i(a),p(2*5)) */
 
 struct Expr {
 	enum ExprType {
@@ -292,10 +295,100 @@ void tree(struct Expr *e)
 	}
 }
 
+struct {
+	char name;
+	double val;
+	int scope;
+} var[2048];
+size_t num_var;
+
+int scope;
+
+void set_variable(char x, double y)
+{
+	for (size_t i = 0; i < num_var; i++) {
+		if (var[i].name == x) {
+			var[i].val = y;
+			return;
+		}
+	}
+	var[num_var].name = x;
+	var[num_var].scope = scope;
+	var[num_var++].val = y;
+}
+
+void kill_variables(int s)
+{
+	while (var[num_var - 1].scope == s) {
+		num_var--;
+	}
+}
+
+double get_variable(char x)
+{
+	for (size_t i = 0; i < num_var; i++) {
+		if (var[i].name == x) {
+			return var[i].val;
+		}
+	}
+	printf("unrecognized identifier %c\n", x);
+	exit(EXIT_FAILURE);
+}
+
+struct Func {
+	char name;
+	char arg[64];
+	size_t num_arg;
+	struct Expr *e;
+} fn[2048];
+size_t num_fn;
+
+void add_function(char x)
+{
+	fn[num_fn++].name = x;
+}
+
+struct Func *get_function(char x)
+{
+	for (size_t i = 0; i < num_fn; i++) {
+		if (fn[i].name == x) {
+			return fn + i;
+		}
+	}
+	return NULL;
+}
+
+void add_arg(struct Expr *e)
+{
+	if (e->type == EXPR_OP && e->op->body == ',') {
+		add_arg(e->a);
+		add_arg(e->b);
+		return;
+	}
+
+	if (e->type == EXPR_NAME) {
+		size_t num_arg = fn[num_fn - 1].num_arg;
+		fn[num_fn - 1].arg[num_arg] = e->val;
+		fn[num_fn - 1].num_arg++;
+		return;
+	}
+
+	printf("wtf\n");
+	exit(EXIT_FAILURE);
+}
+
 double eval(struct Expr *e)
 {
+//	printf("evalutating: "); paren(e); printf("\n");
+/*	for (size_t i = 0; i < num_fn; i++) {
+		printf("function: %c ", fn[i].name);
+		for (size_t j = 0; j < fn[i].num_arg; j++) {
+			printf("%c, ", fn[i].arg[j]);
+		}
+		putchar('\n');
+		}*/
 	switch (e->type) {
-	case EXPR_NAME: printf("%c", e->val); break;
+	case EXPR_NAME: return get_variable(e->val); break;
 	case EXPR_NUM:  return (double)e->val; break;
 	case EXPR_OP: {
 		switch (e->op->type) {
@@ -306,6 +399,11 @@ double eval(struct Expr *e)
 			switch (e->op->body) {
 			case '-': return -eval(e->a); break;
 			case '+': return +eval(e->a); break;
+			case 'p': {
+				double x = eval(e->a);
+				putchar((char)x);
+				return x;
+			} break;
 			}
 		} break;
 		case BINARY: {
@@ -314,6 +412,21 @@ double eval(struct Expr *e)
 			case '+': return eval(e->a) + eval(e->b); break;
 			case '*': return eval(e->a) * eval(e->b); break;
 			case '/': return eval(e->a) / eval(e->b); break;
+			case 'w': while (eval(e->a)) eval(e->b);  break;
+			case '=': {
+				eval(e->a);
+				if (e->a->type == EXPR_OP && e->a->op->type == MEMBER) {
+					struct Func *f = get_function(e->a->a->val);
+					if (f) {
+						f->e = e->b;
+						return -1.f;
+					}
+				} else {
+					set_variable(e->a->val, eval(e->b));
+					return eval(e->a);
+				}
+			} break;
+			case ',': eval(e->a); eval(e->b); break;
 			}
 		} break;
 		case TERNARY: {
@@ -329,14 +442,24 @@ double eval(struct Expr *e)
 			printf(" %c)", e->op->body);
 		} break;
 		case MEMBER: {
-			printf("(member of "); paren(e->a); printf(")");
-			l++;
-			tree(e->b);
-			l--;
+			struct Func *f = get_function(e->a->val);
+			if (f) {
+				scope++;
+				for (size_t i = 0; i < f->num_arg; i++) {
+					set_variable(f->arg[i], 0.f);
+				}
+				double x = eval(f->e);
+				kill_variables(scope--);
+				return x;
+			} else {
+				add_function(e->a->val);
+				add_arg(e->b);
+			}
 		} break;
 		}
 	} break;
 	}
+	return -1.f;
 }
 
 int main(int argc, char **argv)
@@ -350,8 +473,10 @@ int main(int argc, char **argv)
 
 	printf("\nparenthesized:\n\t");
 	paren(e);
+	printf("\nevaluation:\n");
 
-	printf("\nevaluation:\n\t%f\n", eval(e));
+	eval(e);
+	printf("\n");
 
 	return 0;
 }
