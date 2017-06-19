@@ -1,0 +1,150 @@
+expression:
+	a=0,b=5*5*2,(!(a~b))w(i=a,(i)w(p(i%(5+5)+{0}),i=i/(5+5)),p(5+5),a=a+1)
+syntax tree:
+	(binary ,)
+	|-- (binary =)
+	|   |-- a
+	|   `-- 0
+	`-- (binary ,)
+	    |-- (binary =)
+	    |   |-- b
+	    |   `-- (binary *)
+	    |       |-- (binary *)
+	    |       |   |-- 5
+	    |       |   `-- 5
+	    |       `-- 2
+	    `-- (binary w)
+	        |-- (group)
+	        |   `-- (prefix !)
+	        |       `-- (group)
+	        |           `-- (binary ~)
+	        |               |-- a
+	        |               `-- b
+	        `-- (group)
+	            `-- (binary ,)
+	                |-- (binary =)
+	                |   |-- i
+	                |   `-- a
+	                `-- (binary ,)
+	                    |-- (binary w)
+	                    |   |-- (group)
+	                    |   |   `-- i
+	                    |   `-- (group)
+	                    |       `-- (binary ,)
+	                    |           |-- (prefix p)
+	                    |           |   `-- (group)
+	                    |           |       `-- (binary +)
+	                    |           |           |-- (binary %)
+	                    |           |           |   |-- i
+	                    |           |           |   `-- (group)
+	                    |           |           |       `-- (binary +)
+	                    |           |           |           |-- 5
+	                    |           |           |           `-- 5
+	                    |           |           `-- [0]
+	                    |           `-- (binary =)
+	                    |               |-- i
+	                    |               `-- (binary /)
+	                    |                   |-- i
+	                    |                   `-- (group)
+	                    |                       `-- (binary +)
+	                    |                           |-- 5
+	                    |                           `-- 5
+	                    `-- (binary ,)
+	                        |-- (prefix p)
+	                        |   `-- (group)
+	                        |       `-- (binary +)
+	                        |           |-- 5
+	                        |           `-- 5
+	                        `-- (binary =)
+	                            |-- a
+	                            `-- (binary +)
+	                                |-- a
+	                                `-- 1
+parenthesized:
+	((a=0),((b=((5*5)*2)),((!(a~b))w((i=a),((iw((p((i%(5+5))+[0])),(i=(i/(5+5))))),((p(5+5)),(a=(a+1))))))))
+evaluation:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+01
+11
+21
+31
+41
+51
+61
+71
+81
+91
+02
+12
+22
+32
+42
+52
+62
+72
+82
+92
+03
+13
+23
+33
+43
+53
+63
+73
+83
+93
+04
+14
+24
+34
+44
+54
+64
+74
+84
+94
+
+expression:
+	a=s{Hello, world!},i=0,(!(a~i))w(p({Hello, world!}[i]),i=i+1)
+syntax tree:
+	(binary ,)
+	|-- (binary =)
+	|   |-- a
+	|   `-- (prefix s)
+	|       `-- [Hello, world!]
+	`-- (binary ,)
+	    |-- (binary =)
+	    |   |-- i
+	    |   `-- 0
+	    `-- (binary w)
+	        |-- (group)
+	        |   `-- (prefix !)
+	        |       `-- (group)
+	        |           `-- (binary ~)
+	        |               |-- a
+	        |               `-- i
+	        `-- (group)
+	            `-- (binary ,)
+	                |-- (prefix p)
+	                |   `-- (group)
+	                |       `-- (member of [Hello, world!])
+	                |           `-- i
+	                `-- (binary =)
+	                    |-- i
+	                    `-- (binary +)
+	                        |-- i
+	                        `-- 1
+parenthesized:
+	((a=(s[Hello, world!])),((i=0),((!(a~i))w((p([Hello, world!][i])),(i=(i+1))))))
+evaluation:
+Hello, world!

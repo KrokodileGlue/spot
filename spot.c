@@ -233,7 +233,6 @@ void paren(struct Expr *e)
 			printf("[");
 			for (size_t i = 0; i < e->len; i++) {
 				printf("%c", e->list[i]);
-				if (i != e->len - 1) printf(", ");
 			}
 			printf("]");
 		} break;
@@ -328,14 +327,14 @@ void tree(struct Expr *e)
 
 struct {
 	char name;
-	double val;
+	int val;
 	int scope;
 } var[2048];
 size_t num_var;
 
 int scope;
 
-void set_variable(char x, double y)
+void set_variable(char x, int y)
 {
 	for (size_t i = 0; i < num_var; i++) {
 		if (var[i].name == x) {
@@ -355,7 +354,7 @@ void kill_variables(int s)
 	}
 }
 
-double get_variable(char x)
+int get_variable(char x)
 {
 	for (size_t i = 0; i < num_var; i++) {
 		if (var[i].name == x) {
@@ -403,7 +402,7 @@ void add_arg(struct Expr *e)
 	exit(EXIT_FAILURE);
 }
 
-double eval(struct Expr *e)
+int eval(struct Expr *e)
 {
 //	printf("evalutating: "); paren(e); printf("\n");
 /*	for (size_t i = 0; i < num_fn; i++) {
@@ -415,7 +414,7 @@ double eval(struct Expr *e)
 		}*/
 	switch (e->type) {
 	case EXPR_NAME: return get_variable(e->val); break;
-	case EXPR_NUM:  return (double)e->val; break;
+	case EXPR_NUM:  return (int)e->val; break;
 	case EXPR_OP: {
 		switch (e->op->type) {
 		case GROUP: {
@@ -426,7 +425,7 @@ double eval(struct Expr *e)
 			case '-': return -eval(e->a); break;
 			case '+': return +eval(e->a); break;
 			case 'p': {
-				double x = eval(e->a);
+				int x = eval(e->a);
 				putchar((char)x);
 				return x;
 			} break;
@@ -483,7 +482,7 @@ double eval(struct Expr *e)
 				for (size_t i = 0; i < f->num_arg; i++) {
 					set_variable(f->arg[i], 5.f);
 				}
-				double x = eval(f->e);
+				int x = eval(f->e);
 				kill_variables(scope--);
 				return x;
 			} else if (e->op->body == '[') {
@@ -494,7 +493,7 @@ double eval(struct Expr *e)
 			}
 		} break;
 		case LIST: {
-			return (double)e->list[0];
+			return (int)e->list[0];
 		} break;
 		}
 	} break;
