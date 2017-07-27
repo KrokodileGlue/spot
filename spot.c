@@ -32,7 +32,7 @@ struct Op {
 	{ '+', 'n', 6, RIGHT, PREFIX  },
 	{ '-', 'n', 6, RIGHT, PREFIX  },
 	{ 'p', 'n', 6, RIGHT, PREFIX  },
-	{ 's', 'n', 6, RIGHT, PREFIX  },
+	{ 'l', 'n', 6, RIGHT, PREFIX  },
 	{ '!', 'n', 6, RIGHT, PREFIX  },
 	{ '(', ')', 6, LEFT,  GROUP   },
 	{ '*', 'n', 5, LEFT,  BINARY  },
@@ -230,11 +230,11 @@ void paren(struct Expr *e)
 			printf("%c)", e->op->body2);
 		} break;
 		case LIST: {
-			printf("[");
+			printf("{");
 			for (size_t i = 0; i < e->len; i++) {
 				printf("%c", e->list[i]);
 			}
-			printf("]");
+			printf("}");
 		} break;
 		}
 	} break;
@@ -429,7 +429,7 @@ int eval(struct Expr *e)
 				putchar((char)x);
 				return x;
 			} break;
-			case 's': {
+			case 'l': {
 				return e->a->len;
 			} break;
 			case '!': {
@@ -479,6 +479,9 @@ int eval(struct Expr *e)
 			struct Func *f = get_function(e->a->val);
 			if (f) {
 				scope++;
+				/* if it's a number then push the value of the element - '0'
+				 * otherwise it's an identifier and we can get the value of
+				 * a variable of that name.*/
 				for (size_t i = 0; i < f->num_arg; i++) {
 					set_variable(f->arg[i], 5.f);
 				}
